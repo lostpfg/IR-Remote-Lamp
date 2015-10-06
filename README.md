@@ -1,0 +1,3 @@
+# IR-Remote-Lamp
+Simple Arduino project with an IR remote controlled RGB led.
+...
