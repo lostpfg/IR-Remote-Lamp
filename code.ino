@@ -13,6 +13,7 @@
 #define FADE           0xFFD827  /* Fade */
 #define FLASH          0xFFF00F  /* Flash */
 #define SMOOTH         0xFFC837  /* Smooth */
+#define STROBE         0xFFE817  /* Strobe */
 #define WHITE_BTN      0xFFD02F  /* White */
 #define RED_BTN        0xFF906F  /* Red */
 #define ORANGE_BTN     0xFFB04F  /* Orange */
@@ -51,8 +52,7 @@
 
 /* ------ Global Variables ----------------------------------------------------------------------- */
 short    activeColor = BLACK; /* Stores the current led color, in range [0,16] */
-short    lastColor   = BLACK; /* Stores the last active led color, due to color variable */
-short    bright      = 0; /* Keeps track of the current led brightness, in range [0,5] */
+float    bright      = 5; /* Keeps track of the current led brightness, in range [1,5] */
 boolean  doFade      = 0; /* Stores the power state of the led, { 0 --> Off, 1 --> On } */
 boolean  doStrobe    = 0; /* Stores the power state of the led, { 0 --> Off, 1 --> On } */
 boolean  doSmooth    = 0; /* Stores the power state of the led, { 0 --> Off, 1 --> On } */
@@ -62,39 +62,39 @@ boolean  powerState  = 1; /* Stores the power state of the led, { 0 --> Off, 1 -
 int16_t red   = 0x00;
 int16_t green = 0x00; 
 int16_t blue  = 0x00;
-int counter = 0;
-int64_t activeHexColor;
-int64_t lastHexColor;
-
-unsigned long testc;
+int  counter = 0;
+long activeHexColor;
+long activeBrightColor;
+long lastHexColor;
 
 unsigned long interval        = 0;
 unsigned long previousMillis  = 0;       
 
-const    long fade_interval   = 3000;    /* Interval (ms) to fade the led */
-const    long flash_interval  = 1000;    /* Interval (ms) to flash the led */
-const    long smooth_interval = 100;     /* Interval (ms) to smooth the led*/
+const    long flash_interval   = 1000; /* Interval (ms) to flash the led */
+const    long strobe_interval  = 500; /* Interval (ms) to flash the led */
+const    long fade_interval    = 50;   /* Interval (ms) to fade the led */
+const    long smooth_interval  = 200;  /* Interval (ms) to smooth the led*/
 
 /* Lookup table of RGB color values, all colors have 5 hardcoded brightness levels */
-const long  colors[17][5] = { 
-                                {0x000000, 0x000000, 0x000000, 0x000000, 0x000000}, /* Black */
-                                {0xFFFFFF, 0xC3C3C3, 0x878787, 0x4B4B4B, 0x0F0F0F}, /* White */
-                                {0xFF0000, 0xC30000, 0x870000, 0x4B0000, 0x0F0000}, /* Red */
-                                {0xFF4500, 0x806700, 0x874E00, 0x3C3500, 0x0F1C00}, /* Orange */
-                                {0xFF8C00, 0x806700, 0x874E00, 0x3C3500, 0x0F1C00}, /* Tomato */
-                                {0xFFA07A, 0x808266, 0x876452, 0x3C463E, 0x0F282A}, /* Light Salmon */
-                                {0xFFFF00, 0xC3C300, 0x878700, 0x4B4B00, 0x0F0F00}, /* Yellow */
-                                {0x00FF00, 0x00C300, 0x008700, 0x004B00, 0x000F00}, /* Green */
-                                {0x7CFF00, 0x68C300, 0x548700, 0x40FC00, 0x2CFC00}, /* Lawn Green */
-                                {0x00FFFF, 0x00C3C3, 0x008787, 0x004B4B, 0x000F0F}, /* Cyan */
-                                {0x00FA7C, 0x00C868, 0x009654, 0x006440, 0x00322C}, /* Medium Spring Green */
-                                {0x008080, 0x006767, 0x004E4E, 0x003535, 0x001C1C}, /* Teal  */
-                                {0x0000FF, 0x0000C3, 0x000087, 0x00004B, 0x00000F}, /* Blue */
-                                {0x1E90FF, 0x1972C3, 0x145487, 0x0F364B, 0x0A240F}, /* Dodge Blue */
-                                {0x800080, 0x670067, 0x4E004E, 0x350035, 0x1C001C}, /* Purple */
-                                {0x4B0080, 0x410067, 0x37004E, 0x2D0035, 0x24001C}, /* Indigo */
-                                {0x663399, 0x663399, 0x663399, 0x663399, 0x663399}, /* Rebecca purple */
-                             };   
+const long  colors[17] = { 
+                              0x000000, /* Black */
+                              0xFFFFFF, /* White */
+                              0xFF0000, /* Red */
+                              0xFF4500, /* Orange */
+                              0xFF8C00, /* Tomato */
+                              0xFFA07A, /* Light Salmon */
+                              0xFFFF00, /* Yellow */
+                              0x00FF00, /* Green */
+                              0x7CFF00, /* Lawn Green */
+                              0x00FFFF, /* Cyan */
+                              0x00FA7C, /* Medium Spring Green */
+                              0x008080, /* Teal  */
+                              0x0000FF, /* Blue */
+                              0x1E90FF, /* Dodge Blue */
+                              0x800080, /* Purple */
+                              0x4B0080, /* Indigo */
+                              0x663399  /* Rebecca purple */
+                           };   
 
 
 IRrecv irrecv( RECV_PIN ); /* Initialize the irrecv part of the IRremote  library */
@@ -102,56 +102,60 @@ decode_results ir_results; /* Stores IR received codes  */
 
 void setup()
 {
-  irrecv.enableIRIn();   /* Start the IR receiver */
-  Serial.begin( 9600 );  /* Start Serial Communication for debug */
+  irrecv.enableIRIn();   /* Start the IR receiver. */
+  Serial.begin( 9600 );  /* Start Serial Communication for debug. */
 }
 
-/* Write the RGB value of the currently active color */
 void setRGB ( unsigned long inputColor ) {
-  /* Write the RGB value's to output respectivly */
+  /* Write the RGB value's to output respectivly. */
   analogWrite( R_PIN, inputColor >> 16 );
   analogWrite( G_PIN, ( inputColor & 0xFF00  ) >> 8  );
   analogWrite( B_PIN, inputColor & 0xFF );  
 }
 
-void setBrightness ( boolean direct ) {
-  if ( powerState && !doFade && !doFlash && !doSmooth ) { /* Led's state is active and not in Flash,Flade or Smooth mode */
-    if ( direct && bright != 0 ) bright--;                /* Decrease brightness if possible */
-    else if ( !direct && bright != 4 ) bright++;          /* Increase brightness if possible */ 
-    setColor( activeColor );                              /* Update led */
+void setBrightness ( boolean enb, boolean direct ) {
+  if ( powerState ) { /* Check if led's state is active and system is currently not in Flash,Flade or Smooth mode. */
+    if ( enb && !direct && bright != 1 ) bright--;                /* Decrease brightness if possible. */
+    else if ( enb && direct && bright != 5 ) bright++;          /* Increase brightness if possible. */ 
+      red =  ( activeHexColor >> 16 )*( (bright*20)/100 );
+      green =  ( ( activeHexColor >> 8  ) & 0x00FF )*( (bright*20)/100 );
+      blue =   ( activeHexColor & 0xFF )*( (bright*20)/100 );
+      activeBrightColor = ( ( red& 0xFFFFFF) << 16 ) | ((green & 0xFFFFFF) << 8 ) | (blue);
+      setRGB( activeBrightColor );
   }
 }
 
 void setColor ( short inColor ) {
-  /* If system is in Flash,Fade or Smooth mode disable them */
+  /* If system is currently in Flash,Fade or Smooth mode disable it. */
   if ( doFade ) doFade = 0;
   if ( doFlash ) doFlash = 0;
   if ( doSmooth ) doSmooth = 0;
-  if ( powerState ) /* Verify that Led's state is active, then update led's RGB color, keep a backup of it's HEX value and ...*/
-    setRGB( activeHexColor = colors[ activeColor = inColor ][bright] );
+  if ( powerState ) { /* Verify that Led's state is active, then update led's RGB color, keep a backup of it's HEX value and ...*/
+    activeHexColor = colors[ activeColor = inColor ];
+    setBrightness( 0, 0 );
+  }
 }
 
 void setOnOff ( boolean input ) {
   if ( powerState && !input ) {     /* Led is active and Off is pressed */
-    lastColor = activeColor;        /* Backup current led's color from table */
     lastHexColor = activeHexColor;  /* Backup current led's color HEX format */
     setColor( BLACK );              /* Set led Off */
     powerState = !powerState;       /* Update state */
   }
   else if ( !powerState && input ){
     powerState = !powerState;
-    activeColor = lastColor;
     activeHexColor = lastHexColor;
-    setColor( activeColor );
+    setBrightness( 0, 0 );
   }
 }
-/* Loop constantly, check for any received IR code and handle it. */
+
+/* Loop constantly and check for any received IR code and handle it. */
 
 void loop() {
   
-  if ( irrecv.decode( &ir_results ) ) { /* Ir signal detected */
+  if ( irrecv.decode( &ir_results ) ) { /* An IR signal detected */
     Serial.println( ir_results.value, HEX ); /* Use for debug */
-    switch ( ir_results.value ) {
+    switch ( ir_results.value ) { /* Switch between modes */
       case ON:             setOnOff( 1 ); break;
       case OFF:            setOnOff( 0 ); break;
       case WHITE_BTN:      setColor( WHITE ); break;
@@ -170,34 +174,35 @@ void loop() {
       case PURPLE_BTN:     setColor( PURPLE ); break;
       case INDIGO_BTN:     setColor( INDIGO ); break;
       case REBPURPLE_BTN:  setColor( REBPURPLE ); break;
-      case INC_BRIGTH:     setBrightness( 1 ); break;
-      case DEC_BRIGTH:     setBrightness( 0 ); break;
-      case FADE:           if ( !doFlash && !doSmooth ) doFade = !doFade; break;
-      case FLASH:          if ( !doFade && !doSmooth )  doFlash = !doFlash; break;
-      case SMOOTH:         if ( !doFade && !doFlash )   doSmooth = !doSmooth; counter = 0; break;
-      //case STROBE: doStrobe = !doStrobe; break;
+      case INC_BRIGTH:     setBrightness( 1, 1 ); break;
+      case DEC_BRIGTH:     setBrightness( 1, 0 ); break;
+      case FADE:           if ( !doFlash && !doSmooth && !doStrobe ) { doFade = !doFade; counter = 0; } break;
+      case FLASH:          if ( !doFade && !doSmooth && !doStrobe )  doFlash = !doFlash; break;
+      case SMOOTH:         if ( !doFade && !doFlash && !doStrobe )   { doSmooth = !doSmooth; counter = 0; } break;
+      case STROBE:         if ( !doFade && !doFlash && !doSmooth ) doStrobe = !doStrobe; break;
     }
-    irrecv.resume(); /* Receive the next value */ 
+    irrecv.resume(); /* Receive the next IR value */ 
   }
-  if ( doFade || doFlash ) {
+  if ( doStrobe || doFlash ) {
     unsigned long currentMillis = millis();
-    interval = ( doFade ) ? fade_interval : flash_interval;
+    interval = ( doFlash ) ? flash_interval : strobe_interval;
     if (currentMillis - previousMillis >= interval) {
       previousMillis = currentMillis; /* Save the last time the color changed */
       ( activeColor !=  REBPURPLE ) ? ( activeColor++ ) : ( activeColor = WHITE );
-      setRGB( activeHexColor = colors[ activeColor ][bright] );
+      activeHexColor = colors[ activeColor ];
+      setBrightness(0,0);
     }
   }
- if ( doSmooth ) {
+ if ( doSmooth || doFade ) {
     unsigned long currentMillis = millis();
-    interval = smooth_interval;
+    interval = ( doSmooth ) ? smooth_interval : fade_interval;
     if ( currentMillis - previousMillis >= interval ) {
       previousMillis = currentMillis; /* Save the last time the color changed */
       counter = ( counter >= 3*0xFF ) ? 0 : counter+=5;
       activeHexColor = ( (  ( ( counter <= 0xFF ) ? 255-counter : ( counter > 2*255 ) ? counter-2*255 : 0 ) & 0xFFFFFF ) << 16 ) | /* Red */
                        ( ( ( ( counter <= 0xFF ) ? counter : ( counter <= 2*255 ) ? 2*255-counter : 0 ) & 0xFFFFFF ) << 8 ) | /* Green */
                        ( ( counter > 0xFF  ) ? ( counter <= 2*255 ) ? counter-255 : 3*255-counter : 0 );  /* Blue */
-      setRGB( activeHexColor );
+      setBrightness(0,0);
     }
   }
 
