@@ -2,21 +2,21 @@
 Simple Arduino project with an IR remote controlled RGB led.
 ...
 
-# Lamp Modes
+### Lamp Modes
 
-# Color Changing
+### Color Changing
 
-# Brightness Control
+### Brightness Control
 
-# On/Off
+### On/Off
 
-# Fade Mode
+### Fade Mode
 
-# Strobe Mode
+### Strobe Mode
 
-# Flash Mode
+### Flash Mode
 
-# Smooth mode
+### Smooth mode
 
 In this mode, a cycle through all the rainbow colors is made towards the LED.
 The cycle begins with fading from red color through green, then from green through blue and finaly from blue through red. 
